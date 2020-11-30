@@ -1,0 +1,25 @@
+{
+  "name": "libdeltajs",
+  "version": "1.0.0",
+  "description": "Framework for Delta Web Map clients, written in JS.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npx webpack"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deltawebmap/LibDeltaJS.git"
+  },
+  "author": "romanport",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/deltawebmap/LibDeltaJS/issues"
+  },
+  "homepage": "https://github.com/deltawebmap/LibDeltaJS#readme",
+  "devDependencies": {
+    "webpack": "^5.9.0",
+    "webpack-cli": "^4.2.0"
+  },
+  "dependencies": {}
+}
