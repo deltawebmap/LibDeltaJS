@@ -2,6 +2,8 @@ import DeltaObject from '../DeltaObject.js';
 import DeltaContentServerBucketDinos from '../content/bucket/types/DeltaContentServerBucketDinos.js';
 import DeltaContentServerBucketInventories from '../content/bucket/types/DeltaContentServerBucketInventories.js';
 import DeltaContentServerBucketStructures from '../content/bucket/types/DeltaContentServerBucketStructures.js';
+import DeltaGuildUpdateBuilder from './DeltaGuildUpdateBuilder.js';
+import DeltaEventDispatcher from '../DeltaEventDispatcher.js';
 
 export default class DeltaGuild extends DeltaObject {
 
@@ -11,12 +13,15 @@ export default class DeltaGuild extends DeltaObject {
     */
     constructor(conn, info) {
         super(conn);
-        this.name = info.display_name;
-        this.icon_url = info.image_url;
+        this.name = info.name;
+        this.icon_url = info.icon_url;
         this.map_id = info.map_id;
         this.id = info.id;
         this.info = info;
         this.primaldata = null;
+
+        //Events
+        this.OnServerUpdated = new DeltaEventDispatcher();
 
         //Prepare content
         this.content_server = this.conn.GetContentServerByHostname(info.content_server_hostname);
@@ -24,6 +29,28 @@ export default class DeltaGuild extends DeltaObject {
         this.inventories = new DeltaContentServerBucketInventories(this.conn, this.content_server, this.id);
         this.structures = new DeltaContentServerBucketStructures(this.conn, this.content_server, this.id);
         this.buckets = [this.dinos, this.inventories, this.structures];
+
+        //Subscribe RPC events
+        this.SubscribeRPCEvent("SERVER_UPDATED", (p) => {
+            //Server info was updated
+            this.info = p.guild;
+            this.name = p.guild.name;
+            this.icon_url = p.guild.icon_url;
+            this.map_id = p.guild.map_id;
+            this.OnServerUpdated.Fire(this);
+            this.Log("GuildRPC", "Server \"" + this.name + "\" (" + this.id + ") was updated via RPC.");
+        });
+    }
+
+    /*
+        Subscribes to an RPC opcode, filtered to this server.
+
+        @opcode: The opcode to subscribe to
+        @callback: The callback that'll be fired, in this form:
+            ([object] payload, [string] opcode)
+    */
+    SubscribeRPCEvent(opcode, callback) {
+        this.conn.SubscribeRPCEvent(opcode, this.id, callback);
     }
 
     /*
@@ -141,6 +168,62 @@ export default class DeltaGuild extends DeltaObject {
             "multiplicativeTamingBonus": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             "statImprintMult": null
         }
+    }
+    
+    /* 
+        Gets an item entry from the primal data, assuming it is ready. If it can't be found, a placeholder is returned instead.
+
+        @classname: The item classname.
+    */
+    GetItemEntryByClassName(classname) {
+        //Attempt to get it
+        var s = this.primaldata.GetContentByClassName(classname, "ITEMS");
+        if(s != null) {
+            return s;
+        }
+
+        //Return a default
+        return {
+            "classname": classname,
+            "icon": {
+                "image_url": "https://icon-assets.deltamap.net/unknown_dino.png",
+                "image_thumb_url": "https://icon-assets.deltamap.net/unknown_dino.png"
+            },
+            "hideFromInventoryDisplay": false,
+            "useItemDurability": false,
+            "isTekItem": false,
+            "allowUseWhileRiding": false,
+            "name": classname,
+            "description": "Unknown item. It may be modded and is unsupported at this time.",
+            "spoilingTime": 0.0,
+            "baseItemWeight": 0.0,
+            "useCooldownTime": 0.0,
+            "baseCraftingXP": 1.0,
+            "baseRepairingXP": 0.0,
+            "maxItemQuantity": 0,
+            "addStatusValues": {
+
+            }
+        };
+    }
+
+    /* 
+        Gets an item entry from the primal data using a structure entry. RETURNS NULL if not found.
+
+        @classname: The structure classname.
+    */
+    GetItemEntryByStructureClassName(classname) {
+        //Search for the item
+        return this.primaldata.GetContentByFilter("ITEMS", (x) => {
+            return x.structure_classname == classname;
+        });
+    }
+
+    /* 
+        Returns a builder you can use to update the basic attributes of the server
+    */
+    GetUpdateBuilder() {
+        return new DeltaGuildUpdateBuilder(this.conn, this);
     }
 
 }

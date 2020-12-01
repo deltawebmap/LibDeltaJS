@@ -6,12 +6,21 @@ export default class DeltaContentServer extends DeltaObject {
     constructor(conn, hostname) {
         super(conn);
         this.hostname = hostname;
-        this._rpcCommitBindings = {}; //Keys in format "{GUILD ID}-{COMMIT TYPE}"
+        this._registeredGuildIds = [];
+        this._rpcCommitBindings = {}; //Keys in format "{GUILD ID}-{BUCKET NAME}"
         this._sock = new DeltaOpcodeSock(conn, "wss://" + this.hostname + "/events");
         this._sock.OpenConnection();
         this._sock.RegisterCommandHandler("COMMIT_CREATE", (evt, opcode) => this._OnCommitEvent(evt, opcode));
         this._sock.RegisterCommandHandler("COMMIT_PUT_CONTENT", (evt, opcode) => this._OnCommitEvent(evt, opcode));
         this._sock.RegisterCommandHandler("COMMIT_FINALIZE", (evt, opcode) => this._OnCommitEvent(evt, opcode));
+        this._sock.OnConnectedEvent.Subscribe(() => {
+            //Resubscribe servers
+            for(var i = 0; i<this._registeredGuildIds.length; i+=1) {
+                this._sock.SendMessage("REGISTER_GUILD", {
+                    "guild_id": serverId
+                });
+            }
+        });
     }
 
     GetServerUrlBase(serverId) {
@@ -22,18 +31,19 @@ export default class DeltaContentServer extends DeltaObject {
         this._sock.SendMessage("REGISTER_GUILD", {
             "guild_id": serverId
         });
+        this._registeredGuildIds.push(serverId);
     }
 
     /*
         Binds callback for commit events from the RPC
 
         @serverId: The guild ID
-        @commitType: The number representation of the bucket type
+        @bucketName: Name of the bucket being used
         @callback: A callback fired, in this format:
             ([string] command, [object] data)
     */
-    BindRpcCommitEvents(serverId, commitType, callback) {
-        this._rpcCommitBindings[serverId + "-" + commitType] = callback;
+    BindRpcCommitEvents(serverId, bucketName, callback) {
+        this._rpcCommitBindings[serverId + "-" + bucketName] = callback;
     }
 
     async GetServerBucketList(serverId) {
@@ -49,16 +59,9 @@ export default class DeltaContentServer extends DeltaObject {
         return c;
     }
 
-    async GetServerBucketJson(serverId, bucketName, limit, offset) {
-        var d = await this.conn.WebGetJson(this.GetServerUrlBase(serverId) + "/buckets/" + bucketName + "?format=json&offset=" + offset + "&limit=" + limit, {});
-        return d.data;
-    }
-
     _OnCommitEvent(evt, opcode) {
         //Get data
-        var guildId = evt.server_id;
-        var commitType = evt.commit_type;
-        var key = guildId + "-" + commitType;
+        var key = evt.server_id + "-" + evt.bucket_name;
 
         //Send
         if(this._rpcCommitBindings[key] != null) {

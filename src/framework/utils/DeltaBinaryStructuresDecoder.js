@@ -11,6 +11,7 @@ export default class DeltaBinaryStructuresDecoder extends DeltaBinaryDecoderBase
         super(reader);
 
         this.nameTable = [];
+        this.commitTable = [];
         this.content = [];
     }
 
@@ -33,6 +34,14 @@ export default class DeltaBinaryStructuresDecoder extends DeltaBinaryDecoderBase
             this.nameTable.push(this._ReadNullTerminatedString());
         }
 
+        //Read commit ID table count
+        var commitCount = this._ReadUInt16();
+
+        //Read commit table
+        for(var i = 0; i<commitCount; i+=1) {
+            this.commitTable.push(this._ReadNullTerminatedString());
+        }
+
         //Read content count
         var contentTableLen = this._ReadUInt16();
 
@@ -49,6 +58,8 @@ export default class DeltaBinaryStructuresDecoder extends DeltaBinaryDecoderBase
         var nameTableIndex = this._ReadUInt16();
         var flags = this._ReadByte();
         var rotationScaled = this._ReadByte() * 1.41176471;
+        var commitIdIndex = this._ReadByte();
+        var commitType = this._ReadByte();
         var arkId = this._ReadInt32();
         var tribeId = this._ReadInt32();
         var x = this._ReadSingleFloat();
@@ -68,7 +79,9 @@ export default class DeltaBinaryStructuresDecoder extends DeltaBinaryDecoderBase
             },
             "structure_id": arkId,
             "has_inventory": ((flags >> 0) & 1) == 1,
-            "tribe_id": tribeId
+            "tribe_id": tribeId,
+            "commit_id": this.commitTable[commitIdIndex],
+            "commit_type": commitType
         };
     }
 

@@ -22,13 +22,6 @@ export default class DeltaContentServerBucketStructures extends DeltaContentServ
     }
 
     /*
-        [ABSTRACT] Returns the number type for the commit this bucket is responsible for
-    */
-    GetCommitType() {
-        return 1; //confirm this
-    }
-
-    /*
         [ABSTRACT] Returns the unique identifier (UUID) for an object
 
         @o: The object to query

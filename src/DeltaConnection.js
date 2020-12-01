@@ -5,6 +5,7 @@ import DeltaStructureMetadata from './framework/content/structures/DeltaStructur
 import DeltaContentServer from './framework/content/bucket/DeltaContentServer.js';
 import DeltaWebFormatDecoder from './framework/utils/DeltaWebFormatDecoder.js';
 import DeltaBinaryStructuresDecoder from './framework/utils/DeltaBinaryStructuresDecoder.js';
+import DeltaOpcodeSock from './framework/DeltaOpcodeWebsocket.js';
 
 //This class is used by most of the other devices in this library. You should create a DeltaConnection first.
 
@@ -32,10 +33,16 @@ export default class DeltaConnection {
         this.structure_metadata = null;
         this.platform_profile_cache = null;
         this._rpcSock = null;
+        this._rpcBoundEvents = [];
         this._contentServers = {};
     }
 
     async Init() {
+        //Prepare and connect to RPC
+        this._rpcSock = new DeltaOpcodeSock(this, this.enviornment.RPC_HOST + "/rpc/v1");
+        this._rpcSock.RegisterCommandHandler("RPC_MESSAGE", (cmd) => this._OnRpcMessage(cmd));
+        this._rpcSock.OpenConnection();
+
         //Create and login the current user
         this.user = new DeltaCurrentUser(this);
         await this.user.Init();
@@ -77,6 +84,22 @@ export default class DeltaConnection {
             this._contentServers[hostname] = new DeltaContentServer(this, hostname);
         }
         return this._contentServers[hostname];
+    }
+
+    /*
+        Subscribes to an RPC opcode. Optionally binds to a specific server only.
+
+        @opcode: The opcode to subscribe to
+        @guildId: [OPTIONAL] If set, only requests to this guild ID will be sent
+        @callback: The callback that'll be fired, in this form:
+            ([object] payload, [string] opcode)
+    */
+    SubscribeRPCEvent(opcode, guildId, callback) {
+        this._rpcBoundEvents.push({
+            "opcode": opcode,
+            "guild_id": guildId,
+            "callback": callback
+        });
     }
 
     /*
@@ -174,5 +197,12 @@ export default class DeltaConnection {
         });
     }
 
-
+    _OnRpcMessage(data) {
+        //Find all targets
+        for(var i = 0; i<this._rpcBoundEvents.length; i+=1) {
+            if (this._rpcBoundEvents[i].opcode != data.opcode) {continue;}
+            if (this._rpcBoundEvents[i].guild_id != null && data.target_server != null && this._rpcBoundEvents[i].guild_id != data.target_server) {continue;}
+            this._rpcBoundEvents[i].callback(data.payload, data.opcode);
+        }
+    }
 }
