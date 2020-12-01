@@ -1,4 +1,6 @@
+import DeltaEventDispatcher from '../../DeltaEventDispatcher.js';
 import DeltaStreamingContentBase from '../DeltaStreamingContentBase.js'
+import DeltaContentFilter from './DeltaContentFilter.js';
 
 export default class DeltaContentServerBucketBase extends DeltaStreamingContentBase {
 
@@ -19,6 +21,8 @@ export default class DeltaContentServerBucketBase extends DeltaStreamingContentB
             this._latestFullCommitId = null;
             this.Log("ContentServerBucketRPC", "Lost connection to server bucket, resetting last commit ID.");
         });
+        this.OnContentAdded = new DeltaEventDispatcher();
+        this.OnContentRemoved = new DeltaEventDispatcher();
     }
 
     /*
@@ -28,6 +32,13 @@ export default class DeltaContentServerBucketBase extends DeltaStreamingContentB
     */
     GetObjectUUID(o) {
         throw "This must be overridden.";
+    }
+
+    /*
+        Returns a DeltaContentFilter filter for use
+    */
+    GetFilterInterface() {
+        return new DeltaContentFilter(this.conn, this);
     }
 
     /*
@@ -111,6 +122,7 @@ export default class DeltaContentServerBucketBase extends DeltaStreamingContentB
 
     _AddContent(c) {
         //Loop through and generate metadata and add
+        var newItems = [];
         for(var i = 0; i<c.length; i+=1) {
             //Create metadata
             var uuid = this.GetObjectUUID(c[i]);
@@ -132,7 +144,15 @@ export default class DeltaContentServerBucketBase extends DeltaStreamingContentB
                     this._map[uuid][k[j]] = c[i][k[j]];
                 }
             }
+
+            //Add
+            newItems.push(this._map[uuid]);
         }
+
+        //Send events
+        this.OnContentAdded.Fire({
+            "content": newItems
+        });
     }
 
     _RemoveContent(c) {
@@ -151,6 +171,11 @@ export default class DeltaContentServerBucketBase extends DeltaStreamingContentB
             this.content.splice(index, 1);
             delete this._map[uuid];
         }
+
+        //Send events
+        this.OnContentRemoved.Fire({
+            "content": c
+        });
     }
 
     _OnRpcCmdCommitCreated(data) {

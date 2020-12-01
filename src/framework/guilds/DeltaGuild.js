@@ -18,17 +18,29 @@ export default class DeltaGuild extends DeltaObject {
         this.map_id = info.map_id;
         this.id = info.id;
         this.info = info;
+        this.target_tribe = info.target_tribe;
         this.primaldata = null;
+
+        //Misc
+        this.admin_enabled = false;
 
         //Events
         this.OnServerUpdated = new DeltaEventDispatcher();
 
-        //Prepare content
+        //Prepare content buckets
         this.content_server = this.conn.GetContentServerByHostname(info.content_server_hostname);
-        this.dinos = new DeltaContentServerBucketDinos(this.conn, this.content_server, this.id);
-        this.inventories = new DeltaContentServerBucketInventories(this.conn, this.content_server, this.id);
-        this.structures = new DeltaContentServerBucketStructures(this.conn, this.content_server, this.id);
-        this.buckets = [this.dinos, this.inventories, this.structures];
+        this._dinos = new DeltaContentServerBucketDinos(this.conn, this.content_server, this.id);
+        this._inventories = new DeltaContentServerBucketInventories(this.conn, this.content_server, this.id);
+        this._structures = new DeltaContentServerBucketStructures(this.conn, this.content_server, this.id);
+        this.buckets = [this._dinos, this._inventories, this._structures];
+
+        //Get content filters
+        this.dinos = this._dinos.GetFilterInterface();
+        this.inventories = this._inventories.GetFilterInterface();
+        this.structures = this._structures.GetFilterInterface();
+
+        //Apply filters
+        this.RefreshFilters();
 
         //Subscribe RPC events
         this.SubscribeRPCEvent("SERVER_UPDATED", (p) => {
@@ -40,6 +52,37 @@ export default class DeltaGuild extends DeltaObject {
             this.OnServerUpdated.Fire(this);
             this.Log("GuildRPC", "Server \"" + this.name + "\" (" + this.id + ") was updated via RPC.");
         });
+    }
+
+    /*
+        Recreates all of the filters for the buckets and reloads them. Do this when changing settings
+    */
+    RefreshFilters() {
+        //Create dino filters
+        var dinoFilters = [];
+        if (!this.admin_enabled) {
+            dinoFilters.push((e) => e.tribe_id == this.target_tribe.tribe_id);
+        }
+
+        //Create inventories filters
+        var inventoryFilters = [];
+        if (!this.admin_enabled) {
+            inventoryFilters.push((e) => e.tribe_id == this.target_tribe.tribe_id);
+        }
+
+        //Create structures filters
+        var structureFilters = [];
+        if (!this.admin_enabled) {
+            structureFilters.push((e) => e.tribe_id == this.target_tribe.tribe_id);
+        }
+
+        //Apply
+        this.dinos.filters = dinoFilters;
+        this.dinos.RefreshFilters();
+        this.inventories.filters = inventoryFilters;
+        this.inventories.RefreshFilters();
+        this.structures.filters = structureFilters;
+        this.structures.RefreshFilters();
     }
 
     /*
